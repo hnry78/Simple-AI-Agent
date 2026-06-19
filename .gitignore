@@ -1,0 +1,7 @@
+.git
+
+agent_workspace/
+logs/
+.venv/
+__pycache__/
+*.pyc

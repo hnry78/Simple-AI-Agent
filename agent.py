@@ -1,0 +1,73 @@
+# agent.py
+import uuid
+import json
+from datetime import datetime
+from typing import List, Dict, Any
+from tools import TOOL_REGISTRY
+from context import ConversationContext
+from llm_client import LLMClient
+from observability import TrajectoryLogger
+import ai_model
+
+class SimpleAgent:
+    def __init__(self, model: str = ai_model.model_name, max_turns: int = 15, ctx_threshold: int = 80000):
+        self.llm = LLMClient(model)
+        self.ctx = ConversationContext(model, ctx_threshold)
+        self.max_turns = max_turns
+        self.run_id = uuid.uuid4().hex[:12]
+        self.logger = TrajectoryLogger(self.run_id)
+        self.tools_schema = [
+            {"type": "function", "function": {"name": "calculator", "description": "Evaluate a math expression", "parameters": {"type": "object", "properties": {"expr": {"type": "string"}}, "required": ["expr"]}}},
+            {"type": "function", "function": {"name": "read_file", "description": "Read file content", "parameters": {"type": "object", "properties": {"filepath": {"type": "string"}}, "required": ["filepath"]}}},
+            {"type": "function", "function": {"name": "write_file", "description": "Write content to file", "parameters": {"type": "object", "properties": {"filepath": {"type": "string"}, "content": {"type": "string"}}, "required": ["filepath", "content"]}}},
+            {"type": "function", "function": {"name": "run_bash", "description": "Run bash command", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
+            {"type": "function", "function": {"name": "delete_file", "description": "Delete a file", "parameters": {"type": "object", "properties": {"filepath": {"type": "string"}}, "required": ["filepath"]}}},
+        ]
+
+    def run(self, user_prompt: str) -> str:
+        self.ctx.add_message("system", (
+            "You are a helpful assistant. Use tools when needed.\n\n"
+            "Efficiency guidelines:\n"
+            "- For batch mathematical calculations (e.g. mean, stdev, aggregates over many values), "
+            "prefer running a Python one-liner via run_bash(\"python -c ...\") or a short script "
+            "rather than calling the calculator tool multiple times. This saves turns and avoids "
+            "hitting the turn limit.\n"
+            "- Use pandas/csv/statistics via Python when processing tabular data."
+        ))
+        self.ctx.add_message("user", user_prompt)
+        self.logger.log_step("init", {"prompt": user_prompt})
+
+        for turn in range(1, self.max_turns + 1):
+            self.ctx.apply_threshold_strategy()
+            self.logger.log_step("context_trim", {"tokens_before": self.ctx.estimate_current_tokens()})
+            response = self.llm.chat_completion(self.ctx.messages, self.tools_schema)
+            print(f"DEBUG: response type = {type(response)}, value = {response}") # 🔍 打印查看
+            msg = response.choices[0].message
+            self.ctx.add_message(msg.role, msg.content, tool_calls=msg.tool_calls)
+            self.ctx.total_output_tokens += response.usage.completion_tokens
+            self.logger.log_step("llm_response", {"turn": turn, "tool_calls": bool(msg.tool_calls)})
+
+            if not msg.tool_calls:
+                final_answer = msg.content
+                self.logger.log_step("finish", {"answer": final_answer})
+                return final_answer
+
+            # 执行工具和错误恢复
+            for tc in msg.tool_calls:
+                fn_name = tc.function.name
+                fn_args = json.loads(tc.function.arguments)
+                self.logger.log_step("tool_call", {"name": fn_name, "args": fn_args})
+
+                try:
+                    if fn_name in TOOL_REGISTRY:
+                        res = TOOL_REGISTRY[fn_name](**fn_args)
+                    else:
+                        res = {"status": "error", "output": f"Tool '{fn_name}' not found"}
+                except Exception as e:
+                    res = {"status": "error", "output": f"ExecutionError: {e}"}
+
+                # 工具结果回写 Context，供下一轮 LLM 参考
+                self.ctx.add_message("tool", json.dumps(res), tool_call_id=tc.id)
+                self.logger.log_step("tool_result", res)
+
+        return f"[Stop] Reached max turns ({self.max_turns}). Last context: ..."
