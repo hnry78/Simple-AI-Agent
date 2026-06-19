@@ -1,4 +1,4 @@
-# Simple AI agent without existing agent framework
+# Simple-AI-Agent
 个人开发的轻量化agent，可以实现数学计算，文件读写（在项目文件夹下），bash命令执行（简单沙箱）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -50,8 +50,8 @@ AItask/
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/hnry78/simple-AI-agent.git
-cd simple-AI-agent
+git clone https://github.com/hnry78/Simple-AI-Agent.git
+cd simple-AI-Agent
 
 # 2. 创建虚拟环境（推荐）
 python -m venv venv
