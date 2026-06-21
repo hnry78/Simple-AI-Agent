@@ -73,6 +73,6 @@ pip install -r requirements.txt
 - 文件操作仅限制在.\agent_workspace里（程序会自动创建），请将你需要agent读取的材料加入.\agent_workspace
 - 日志和run_id记录在.\logs里，用jsonl格式储存
 
-## 📄 许可证
+## 许可证
 
 [MIT](LICENSE) © 2026
