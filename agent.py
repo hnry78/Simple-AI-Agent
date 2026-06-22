@@ -45,12 +45,15 @@ class SimpleAgent:
         self.ctx.add_message("system", (
             "You are a helpful assistant. Use tools when needed.\n\n"
             f"### Current Environment\n{env_info}\n\n"
-            "Efficiency guidelines:\n"
-            "- For batch mathematical calculations (e.g. mean, stdev, aggregates over many values), "
-            "prefer running a Python one-liner via run_bash(\"python -c ...\") or a short script "
-            "rather than calling the calculator tool multiple times. This saves turns and avoids "
-            "hitting the turn limit.\n"
-            "- Use pandas/csv/statistics via Python when processing tabular data."
+            "Turn efficiency guidelines (each turn costs LLM inference — minimize turns):\n"
+            "- PLAN AHEAD: Think through the full solution, then EXECUTE in the fewest possible tools calls. "
+            "Prefer one comprehensive Python script over multiple sequential steps.\n"
+            "- BATCH read+process+output: Instead of: read file → analyze step1 → analyze step2 → write output (4 turns), "
+            "do: read file → write & run ONE Python script that does all processing + generates output (2 turns).\n"
+            "- Prefer writing a .py file and running it: for multi-step logic, write a complete Python script "
+            "via write_file, then run it via run_bash. This avoids splitting work across multiple turns.\n"
+            "- For batch math (mean, stdev, etc.), use one Python one-liner or script, not individual calculator calls.\n"
+            "- Use Python's statistics/csv/pandas modules when processing tabular data — do all analysis in one shot."
         ))
         self.ctx.add_message("user", user_prompt)
         self.logger.log_step("init", {"prompt": user_prompt})
