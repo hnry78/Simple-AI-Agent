@@ -1,6 +1,8 @@
 # agent.py
 import uuid
 import json
+import sys
+import platform
 from datetime import datetime
 from typing import List, Dict, Any
 from tools import TOOL_REGISTRY
@@ -20,13 +22,29 @@ class SimpleAgent:
             {"type": "function", "function": {"name": "calculator", "description": "Evaluate a math expression", "parameters": {"type": "object", "properties": {"expr": {"type": "string"}}, "required": ["expr"]}}},
             {"type": "function", "function": {"name": "read_file", "description": "Read file content", "parameters": {"type": "object", "properties": {"filepath": {"type": "string"}}, "required": ["filepath"]}}},
             {"type": "function", "function": {"name": "write_file", "description": "Write content to file", "parameters": {"type": "object", "properties": {"filepath": {"type": "string"}, "content": {"type": "string"}}, "required": ["filepath", "content"]}}},
-            {"type": "function", "function": {"name": "run_bash", "description": "Run bash command", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
+            {"type": "function", "function": {"name": "run_bash", "description": "Run a shell command.Use Python via: python -c \"...\"  ", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
             {"type": "function", "function": {"name": "delete_file", "description": "Delete a file", "parameters": {"type": "object", "properties": {"filepath": {"type": "string"}}, "required": ["filepath"]}}},
         ]
 
+    @staticmethod
+    def detect_env() -> str:
+        os_name = platform.system()
+        info = [
+            f"OS: {os_name}",
+            f"Platform: {sys.platform}",
+            f"Python: {sys.version}",
+        ]
+        if os_name == "Windows":
+            info.append("Tip: Use 'python' (not 'python3') and 'dir' (not 'ls') in shell commands.")
+        else:
+            info.append("Tip: Use 'python3' in shell commands.")
+        return "\n".join(info)
+
     def run(self, user_prompt: str) -> str:
+        env_info = self.detect_env()
         self.ctx.add_message("system", (
             "You are a helpful assistant. Use tools when needed.\n\n"
+            f"### Current Environment\n{env_info}\n\n"
             "Efficiency guidelines:\n"
             "- For batch mathematical calculations (e.g. mean, stdev, aggregates over many values), "
             "prefer running a Python one-liner via run_bash(\"python -c ...\") or a short script "
